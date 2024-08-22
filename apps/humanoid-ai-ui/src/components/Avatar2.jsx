@@ -97,6 +97,7 @@ const corresponding = {
   X: 'Viseme_PP',
 };
 
+
 let setupMode = false;
 
 export default function Avatar2(props) {
@@ -106,11 +107,24 @@ export default function Avatar2(props) {
   const [lipsync, setLipsync] = useState();
   const [audio, setAudio] = useState();
   const [facialExpression, setFacialExpression] = useState("default");
+  const [blink, setBlink] = useState(false);
+
+  const group = useRef();
+  const { animations } = useGLTF('/model2/animations.glb');
+  const { actions, mixer } = useAnimations(animations, group);
+
+  // Improved logic to handle potential issues with undefined animations
+  const [animation, setAnimation] = useState(() => {
+    if (animations && animations.length > 0) {
+      const idleAnimation = animations.find((a) => a.name === "Idle");
+      return idleAnimation ? idleAnimation.name : animations[0].name;
+    }
+    return null;
+  });
 
   useEffect(() => {
     if (message) {
       console.log("Received message:", message);
-      console.log("Lipsync data:", message.lipsync);
 
       // Play the corresponding audio file
       const audioFile = new Audio("data:audio/mp3;base64," + message.audio);
@@ -126,41 +140,23 @@ export default function Avatar2(props) {
         onMessagePlayed();
       };
     }
-  }, [message]);
-
-  const { animations } = useGLTF('/model2/animations.glb');
-
-  const group = useRef();
-  const { actions, mixer } = useAnimations(animations, group);
-  const [animation, setAnimation] = useState(
-    animations.find((a) => a.name === "Idle") ? "Idle" : animations[0].name
-  );
+  }, [message, onMessagePlayed]);
 
   useEffect(() => {
-    actions[animation]
-      .reset()
-      .fadeIn(mixer.stats.actions.inUse === 0 ? 0 : 0.5)
-      .play();
-    return () => actions[animation].fadeOut(0.5);
+    if (actions && animation) {
+      console.log(`Playing animation: ${animation}`);
+      actions[animation]
+        .reset()
+        .fadeIn(0.5)
+        .play();
+
+      return () => actions[animation]?.fadeOut(0.5);
+    }
   }, [animation, actions]);
 
-  const lerpMorphTarget = (target, value, speed = 0.1) => {
-    scene.traverse((child) => {
-      if (child.isSkinnedMesh && child.morphTargetDictionary) {
-        const index = child.morphTargetDictionary[target];
-        if (index === undefined || child.morphTargetInfluences[index] === undefined) {
-          return;
-        }
-        child.morphTargetInfluences[index] = THREE.MathUtils.lerp(
-          child.morphTargetInfluences[index],
-          value,
-          speed
-        );
-      }
-    });
-  };
+  useFrame((state, delta) => {
+    if (mixer) mixer.update(delta);
 
-  useFrame(() => {
     if (!setupMode) {
       // LIPSYNC
       if (lipsync && audio) {
@@ -187,8 +183,28 @@ export default function Avatar2(props) {
           lerpMorphTarget(key, 0, 0.1);
         }
       });
+
+      // EYE BLINKING
+      lerpMorphTarget("Eye_Blink_L", blink ? 1 : 0, 0.5);
+      lerpMorphTarget("Eye_Blink_R", blink ? 1 : 0, 0.5);
     }
   });
+
+  const lerpMorphTarget = (target, value, speed = 0.1) => {
+    scene.traverse((child) => {
+      if (child.isSkinnedMesh && child.morphTargetDictionary) {
+        const index = child.morphTargetDictionary[target];
+        if (index === undefined || child.morphTargetInfluences[index] === undefined) {
+          return;
+        }
+        child.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+          child.morphTargetInfluences[index],
+          value,
+          speed
+        );
+      }
+    });
+  };
 
   useEffect(() => {
     let blinkTimeout;
@@ -204,6 +220,7 @@ export default function Avatar2(props) {
     nextBlink();
     return () => clearTimeout(blinkTimeout);
   }, []);
+
 
   return (
     <group {...props} dispose={null} ref={group}>

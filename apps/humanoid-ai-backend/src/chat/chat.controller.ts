@@ -87,7 +87,7 @@ export class ChatController {
         const fileName = `message_${i}.mp3`;
         const audioResponse = await this.chatService.generateSpeech(message.text, fileName);
         message.audio = audioResponse.audio;
-        message.lipsync = await this.chatService.readJsonTranscript(`audios/message_0.json`);
+        message.lipsync = await this.chatService.readJsonTranscript(`audios/message_${i}.json`);
       }
 
       return { messages };

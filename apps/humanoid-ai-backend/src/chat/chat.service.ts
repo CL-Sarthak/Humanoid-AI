@@ -10,6 +10,7 @@ import * as os from 'os';
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
+  private conversationHistory: { role: string; content: string }[] = [];
 
   constructor(
     private readonly httpService: HttpService,
@@ -40,13 +41,20 @@ export class ChatService {
                 role: 'user',
                 content: userMessage || 'Hello',
               },
+              ...this.conversationHistory,
             ],
+
           },
           {
             headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
           },
         ),
       );
+      this.conversationHistory.push({
+        role: 'assistant',
+        content: response.data.choices[0].message.content, 
+      });
+      
       return response.data;
     } catch (error) {
       this.logger.error('Error calling OpenAI API:', error.message);
